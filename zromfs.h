@@ -7,23 +7,36 @@ extern "C" {
 #endif
 
 // configurations
-#define ZR_ENDIAN_LITTLE
-//#define ZR_ENDIAN_BIG
-#define ZR_MAX_OPENED_FILES 8
+//#define ZR_ENDIAN_LITTLE  // x86, avr, arm
+#define ZR_ENDIAN_BIG       // 51 & stm8
+#define ZR_MAX_OPENED_FILES 2
 
 typedef unsigned char zr_u8_t;
 typedef unsigned short zr_u16_t;
 typedef unsigned long zr_u32_t;
+typedef signed long zr_s32_t;
 
 enum {
-    ZR_OK = 0, ZR_NO_FILESYSTEM = -1, ZR_DISK_ERR = -2, ZR_FILE_NOT_FOUND = -3,
-    ZR_DIR_NOT_FOUND = -4, ZR_NO_FILE = -5, ZR_NOT_A_DIR = -6,
-    ZR_FILETYPE_NOT_SUPPORTED = -7, ZR_FILE_NOT_OPENED = -8
+    ZR_OK = 0,
+    ZR_NO_FILESYSTEM = -1,
+    ZR_DISK_ERR = -2,
+    ZR_FILE_NOT_FOUND = -3,
+    ZR_DIR_NOT_FOUND = -4,
+    ZR_NO_FILE = -5,
+    ZR_NOT_A_DIR = -6,
+    ZR_FILETYPE_NOT_SUPPORTED = -7,
+    ZR_FILE_NOT_OPENED = -8
 };
 
 enum {
-    ZR_FTYPE_HARDLINK, ZR_FTYPE_DIR, ZR_FTYPE_REGULAR, ZR_FTYPE_SYMBOL_LINK,
-    ZR_FTYPE_BLOCK_DEV, ZR_FTYPE_CHAR_DEV, ZR_FTYPE_SOCKET, ZR_FTYPE_FIFO
+    ZR_FTYPE_HARDLINK,
+    ZR_FTYPE_DIR,
+    ZR_FTYPE_REGULAR,
+    ZR_FTYPE_SYMBOL_LINK,
+    ZR_FTYPE_BLOCK_DEV,
+    ZR_FTYPE_CHAR_DEV,
+    ZR_FTYPE_SOCKET,
+    ZR_FTYPE_FIFO
 };
 
 typedef struct {

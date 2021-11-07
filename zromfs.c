@@ -1,7 +1,4 @@
 #include "zromfs.h"
-#include <fcntl.h>
-
-#define _dbg() printf("%s %d\n", __FILE__, __LINE__)
 
 #include <stdio.h> // debug
 #include <string.h>
@@ -11,7 +8,7 @@ typedef struct {
     zr_u32_t word1;
     zr_u32_t size;
     zr_u32_t checksum;
-    char name[0]; /* volume name */
+//    char name[0]; /* volume name */
 } zr_super_block_t;
 
 typedef struct {
@@ -19,10 +16,10 @@ typedef struct {
     zr_u32_t spec;
     zr_u32_t size;
     zr_u32_t checksum;
-    char name[0];
+//    char name[0];
 } zr_inode_t;
 
-static struct {
+@near static struct {
     struct {
         zr_u32_t size, curr_pos, offset;
     } fds[ZR_MAX_OPENED_FILES + 3];     // keep 0, 1, 2
@@ -49,10 +46,12 @@ static zr_u32_t __checksum(zr_fs_t* fs)
     zr_u32_t buf[128];
     zr_u32_t sum = 0;
     zr_u32_t chksum_size = fs->size >= 512 ? 512 : fs->size;
-//printf("### %d\n", chksum_size);
     fs->read_f(fs->start, buf, chksum_size);
-    for(int i = 0; i < chksum_size / 4; i++)
-        sum += __le(buf[i]);
+    {
+        int i;
+        for(i = 0; i < chksum_size / 4; i++)
+            sum += __le(buf[i]);
+    }
     return sum;
 }
 
@@ -64,8 +63,8 @@ int zr_init(zr_fs_t* fs)
     if(memcmp(&super, "-rom1fs-", 8) != 0)
         return ZR_NO_FILESYSTEM;
     fs->size = __le(super.size);
-//    printf("%d %08lX\n", fs->size, __checksum(fs));
-    if(__checksum(fs) != 0) return ZR_DISK_ERR;
+    if(__checksum(fs) != 0)
+        return ZR_DISK_ERR;
 
     return ZR_OK;
 }
@@ -80,7 +79,7 @@ static zr_u32_t __skip_name(zr_fs_t* fs, zr_u32_t offset)
     return offset;
 }
 
-static int __seek_fname(zr_fs_t* fs, zr_u32_t offset, const char* path)
+static zr_s32_t __seek_fname(zr_fs_t* fs, zr_u32_t offset, const char* path)
 {
     while(path[0] == '/')
         path++;
@@ -90,16 +89,14 @@ static int __seek_fname(zr_fs_t* fs, zr_u32_t offset, const char* path)
     while(1) {
         zr_inode_t inode;
         char fname[16];
-//        printf("###$ %08lX\n", offset);
 
         fs->read_f(offset, &inode, sizeof(inode));
-        fs->read_f(offset + 16, fname, sizeof(fname)); // fname, only 16 chars available
+        fs->read_f(offset + 16, fname, sizeof(fname));    // fname, only 16 chars available
         if(strcmp(path, fname) == 0) {    // path found
             if(__ftype(inode) == ZR_FTYPE_REGULAR
                 || __ftype(inode) == ZR_FTYPE_DIR)
                 return offset;
             else if(__ftype(inode) == ZR_FTYPE_HARDLINK) {
-//                printf("%08lX\n", __le(inode.spec));
                 return __le(inode.spec);
             }
             else
@@ -108,22 +105,20 @@ static int __seek_fname(zr_fs_t* fs, zr_u32_t offset, const char* path)
         if(strstr(path, fname) == path && path[strlen(fname)] == '/') {
 
             if(__ftype(inode) == ZR_FTYPE_HARDLINK) {    //hard link to . or ..
-                printf("Not supported\n");
-                return -1;
+                return ZR_FILETYPE_NOT_SUPPORTED;
             }
             else if(__ftype(inode) == ZR_FTYPE_DIR) {    //directory
                 zr_inode_t t;
 
                 fs->read_f(offset, &t, sizeof(t));
-                fs->read_f(offset + 16, fname, sizeof(fname)); // fname, only 16 chars available
+                fs->read_f(offset + 16, fname, sizeof(fname));    // fname, only 16 chars available
                 offset = __seek_fname(fs, __le(t.spec) & ~0xf,
                     path + strlen(fname) + 1);
                 if(offset > 0)
                     return offset;
             }
-            else if(__ftype(inode) == ZR_FTYPE_SYMBOL_LINK) { //symbolic link to a directory
-                printf("Not supported\n");
-                return -1;
+            else if(__ftype(inode) == ZR_FTYPE_SYMBOL_LINK) {    //symbolic link to a directory
+                return ZR_FILETYPE_NOT_SUPPORTED;
             }
         }
         offset = __le(inode.next);
@@ -135,10 +130,11 @@ static int __seek_fname(zr_fs_t* fs, zr_u32_t offset, const char* path)
 
 int zr_opendir(zr_fs_t* fs, zr_dir_t* dir, const char* path)
 {
+    zr_s32_t offset;
     zr_inode_t inode;
     dir->offset = fs->start + 16;
     dir->offset = __skip_name(fs, dir->offset);
-    int offset = __seek_fname(fs, dir->offset, path);
+    offset = __seek_fname(fs, dir->offset, path);
     if(offset == -1)
         return ZR_DIR_NOT_FOUND;
     fs->read_f(offset, &inode, sizeof(inode));
@@ -153,7 +149,7 @@ int zr_opendir(zr_fs_t* fs, zr_dir_t* dir, const char* path)
 int zr_stat(zr_fs_t* fs, const char* path, zr_finfo_t* finfo)
 {
     zr_inode_t inode;
-    int offset = fs->start + 16;
+    zr_s32_t offset = fs->start + 16;
     offset = __skip_name(fs, offset);
     offset = __seek_fname(fs, offset, path);
     if(offset < 0)
@@ -191,7 +187,8 @@ int zr_readdir(zr_fs_t* fs, zr_dir_t* dir, zr_finfo_t* finfo)
 
 int __find_free_fd(void)
 {
-    for(int i = 3; i < ZR_MAX_OPENED_FILES + 3; i++) {
+    int i;
+    for(i = 3; i < ZR_MAX_OPENED_FILES + 3; i++) {
         if(g.fds[i].offset == 0)
             return i;
     }
@@ -200,19 +197,20 @@ int __find_free_fd(void)
 
 int zr_open(zr_fs_t* fs, const char* path)
 {
+    int fd;
     zr_finfo_t finfo;
     int ret = zr_stat(fs, path, &finfo);
     if(ret != ZR_OK)
         return ret;
 
-    int fd = __find_free_fd();
+    fd = __find_free_fd();
     if(fd < 0)
         return fd;
     g.fds[fd].size = finfo.fsize;
     g.fds[fd].offset = finfo.offset + 16;
     g.fds[fd].offset = __skip_name(fs, g.fds[fd].offset);
     g.fds[fd].curr_pos = 0;
-    return fd;  //skips system FDs
+    return fd;    //skips system FDs
 }
 
 int zr_close(zr_fs_t* fs, int fd)
@@ -229,8 +227,6 @@ int zr_read(zr_fs_t* fs, int fd, void* buf, zr_u32_t nbytes)
     int max_to_read;
     if(g.fds[fd].offset == 0)
         return ZR_FILE_NOT_OPENED;
-
-//    printf("\n@@@%d %d\n\n", g.fds[fd].size, g.fds[fd].curr_pos);
 
     max_to_read = g.fds[fd].size - g.fds[fd].curr_pos;
     if(max_to_read < 0)
