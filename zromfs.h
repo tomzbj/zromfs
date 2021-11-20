@@ -9,6 +9,7 @@ extern "C" {
 // configurations
 //#define ZR_ENDIAN_LITTLE  // x86, avr, arm
 #define ZR_ENDIAN_BIG       // 51 & stm8
+#define ZR_MAX_VOLUMNS 2
 #define ZR_MAX_OPENED_FILES 2
 
 typedef unsigned char zr_u8_t;
@@ -58,16 +59,17 @@ typedef struct {
     zr_u32_t ftype;
 } zr_finfo_t;
 
-int zr_init(zr_fs_t* fs);
-int zr_open(zr_fs_t* fs, const char* path);
-int zr_close(zr_fs_t* fs, int fd);
-int zr_read(zr_fs_t* fs, int fd, void* buff, zr_u32_t nbytes);
-int zr_lseek(zr_fs_t* fs, int fd, zr_u32_t offset);
-zr_u32_t zr_tell(zr_fs_t* fs, int fd);
-int zr_stat(zr_fs_t* fs, const char* path, zr_finfo_t* finfo);
+//int zr_init(zr_fs_t* fs);
+int zr_mount(zr_fs_t* fs, const char* path);
+int zr_open( const char* path);
+int zr_close(int fd);
+int zr_read(int fd, void* buff, zr_u32_t nbytes);
+int zr_lseek(int fd, zr_u32_t offset, int seek_opt);
+zr_u32_t zr_tell(int fd);
+int zr_stat(const char* path, zr_finfo_t* finfo);
 
-int zr_opendir(zr_fs_t* fs, zr_dir_t* dir, const char* path);
-int zr_readdir(zr_fs_t* fs, zr_dir_t* dir, zr_finfo_t* finfo);
+int zr_opendir(zr_dir_t* dir, const char* path);
+int zr_readdir(zr_dir_t* dir, zr_finfo_t* finfo);
 
 #ifdef __cplusplus
 }
