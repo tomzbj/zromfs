@@ -15,10 +15,9 @@ void read_func(zr_u32_t offset, void* buf, zr_u32_t size)
     read(g.fd, buf, size);
 }
 
-zr_fs_t fs;
-
 int main(int argc, char* argv[])
 {
+    static zr_fs_t fs;
     if(argc != 2) {
         puts("Usage: zr_cli img_file");
         exit(1);

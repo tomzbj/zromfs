@@ -19,10 +19,14 @@ typedef struct {
 //    char name[0];
 } zr_inode_t;
 
-@near static struct {
+static struct {
     struct {
         zr_u32_t size, curr_pos, offset;
     } fds[ZR_MAX_OPENED_FILES + 3];     // keep 0, 1, 2
+    struct {
+        zr_fs_t* fs;
+        int id, mounted;
+    } volume[ZR_MAX_VOLUMNS];
 } g;
 
 #define _mk4(d,c,b,a) \
@@ -55,7 +59,7 @@ static zr_u32_t __checksum(zr_fs_t* fs)
     return sum;
 }
 
-int zr_init(zr_fs_t* fs)
+ZR_RESULT zr_mount(zr_fs_t* fs, int volume_id)
 {
     zr_super_block_t super;
     fs->read_f(fs->start, &super, sizeof(super));
@@ -68,6 +72,22 @@ int zr_init(zr_fs_t* fs)
 
     return ZR_OK;
 }
+
+/*
+ int zr_init(zr_fs_t* fs)
+ {
+ zr_super_block_t super;
+ fs->read_f(fs->start, &super, sizeof(super));
+
+ if(memcmp(&super, "-rom1fs-", 8) != 0)
+ return ZR_NO_FILESYSTEM;
+ fs->size = __le(super.size);
+ if(__checksum(fs) != 0)
+ return ZR_DISK_ERR;
+
+ return ZR_OK;
+ }
+ */
 
 static zr_u32_t __skip_name(zr_fs_t* fs, zr_u32_t offset)
 {
