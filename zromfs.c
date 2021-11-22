@@ -8,7 +8,6 @@ typedef struct {
     zr_u32_t word1;
     zr_u32_t size;
     zr_u32_t checksum;
-//    char name[0]; /* volume name */
 } zr_super_block_t;
 
 typedef struct {
@@ -16,7 +15,6 @@ typedef struct {
     zr_u32_t spec;
     zr_u32_t size;
     zr_u32_t checksum;
-//    char name[0];
 } zr_inode_t;
 
 static struct {
@@ -25,8 +23,9 @@ static struct {
     } fds[ZR_MAX_OPENED_FILES + 3];     // keep 0, 1, 2
     struct {
         zr_fs_t* fs;
-        int id, mounted;
+        int mounted;
     } volume[ZR_MAX_VOLUMNS];
+    int curr_volume, last_volume;
 } g;
 
 #define _mk4(d,c,b,a) \
@@ -59,39 +58,31 @@ static zr_u32_t __checksum(zr_fs_t* fs)
     return sum;
 }
 
-ZR_RESULT zr_mount(zr_fs_t* fs, int volume_id)
+int zr_mount(zr_fs_t* fs)
 {
+    if(g.last_volume >= ZR_MAX_VOLUMNS)
+        return ZR_VOLUME_NUM_EXCEED;
     zr_super_block_t super;
-    fs->read_f(fs->start, &super, sizeof(super));
 
+    fs->read_f(fs->start, &super, sizeof(super));
     if(memcmp(&super, "-rom1fs-", 8) != 0)
         return ZR_NO_FILESYSTEM;
     fs->size = __le(super.size);
     if(__checksum(fs) != 0)
         return ZR_DISK_ERR;
 
-    return ZR_OK;
+    g.volume[g.last_volume].fs = fs;
+    g.volume[g.last_volume].mounted = 1;
+
+    int ret = g.last_volume;
+    g.last_volume++;
+    return ret;
 }
 
-/*
- int zr_init(zr_fs_t* fs)
- {
- zr_super_block_t super;
- fs->read_f(fs->start, &super, sizeof(super));
-
- if(memcmp(&super, "-rom1fs-", 8) != 0)
- return ZR_NO_FILESYSTEM;
- fs->size = __le(super.size);
- if(__checksum(fs) != 0)
- return ZR_DISK_ERR;
-
- return ZR_OK;
- }
- */
-
-static zr_u32_t __skip_name(zr_fs_t* fs, zr_u32_t offset)
+static zr_u32_t __skip_name(zr_u32_t offset)
 {
     char buf[16];
+    zr_fs_t* fs = g.volume[g.curr_volume].fs;
     do {
         fs->read_f(offset, buf, 16);
         offset += 16;
@@ -99,8 +90,9 @@ static zr_u32_t __skip_name(zr_fs_t* fs, zr_u32_t offset)
     return offset;
 }
 
-static zr_s32_t __seek_fname(zr_fs_t* fs, zr_u32_t offset, const char* path)
+static zr_s32_t __seek_fname(zr_u32_t offset, const char* path)
 {
+    zr_fs_t* fs = g.volume[g.curr_volume].fs;
     while(path[0] == '/')
         path++;
     if(strlen(path) == 0)
@@ -132,7 +124,7 @@ static zr_s32_t __seek_fname(zr_fs_t* fs, zr_u32_t offset, const char* path)
 
                 fs->read_f(offset, &t, sizeof(t));
                 fs->read_f(offset + 16, fname, sizeof(fname));    // fname, only 16 chars available
-                offset = __seek_fname(fs, __le(t.spec) & ~0xf,
+                offset = __seek_fname(__le(t.spec) & ~0xf,
                     path + strlen(fname) + 1);
                 if(offset > 0)
                     return offset;
@@ -148,13 +140,25 @@ static zr_s32_t __seek_fname(zr_fs_t* fs, zr_u32_t offset, const char* path)
     }
 }
 
-int zr_opendir(zr_fs_t* fs, zr_dir_t* dir, const char* path)
+ZR_RESULT zr_select_volume(int volume_id)
+{
+    if(g.volume[volume_id].mounted == 1) {
+        g.curr_volume = volume_id;
+        return ZR_OK;
+    }
+    else
+        return ZR_VOLUME_NOT_MOUNTED;
+}
+
+int zr_opendir(zr_dir_t* dir, const char* path)
 {
     zr_s32_t offset;
     zr_inode_t inode;
+    zr_fs_t* fs = g.volume[g.curr_volume].fs;
+
     dir->offset = fs->start + 16;
-    dir->offset = __skip_name(fs, dir->offset);
-    offset = __seek_fname(fs, dir->offset, path);
+    dir->offset = __skip_name(dir->offset);
+    offset = __seek_fname(dir->offset, path);
     if(offset == -1)
         return ZR_DIR_NOT_FOUND;
     fs->read_f(offset, &inode, sizeof(inode));
@@ -166,12 +170,14 @@ int zr_opendir(zr_fs_t* fs, zr_dir_t* dir, const char* path)
     return ZR_OK;
 }
 
-int zr_stat(zr_fs_t* fs, const char* path, zr_finfo_t* finfo)
+int zr_stat(const char* path, zr_finfo_t* finfo)
 {
     zr_inode_t inode;
+
+    zr_fs_t* fs = g.volume[g.curr_volume].fs;
     zr_s32_t offset = fs->start + 16;
-    offset = __skip_name(fs, offset);
-    offset = __seek_fname(fs, offset, path);
+    offset = __skip_name(offset);
+    offset = __seek_fname(offset, path);
     if(offset < 0)
         return ZR_FILE_NOT_FOUND;
     fs->read_f(offset, &inode, sizeof(inode));
@@ -186,9 +192,10 @@ int zr_stat(zr_fs_t* fs, const char* path, zr_finfo_t* finfo)
     return ZR_OK;
 }
 
-int zr_readdir(zr_fs_t* fs, zr_dir_t* dir, zr_finfo_t* finfo)
+int zr_readdir(zr_dir_t* dir, zr_finfo_t* finfo)
 {
     zr_inode_t inode;
+    zr_fs_t* fs = g.volume[g.curr_volume].fs;
 
     if(dir->offset == fs->start)
         return ZR_NO_FILE;
@@ -215,11 +222,11 @@ int __find_free_fd(void)
     return -1;
 }
 
-int zr_open(zr_fs_t* fs, const char* path)
+int zr_open(const char* path)
 {
     int fd;
     zr_finfo_t finfo;
-    int ret = zr_stat(fs, path, &finfo);
+    int ret = zr_stat(path, &finfo);
     if(ret != ZR_OK)
         return ret;
 
@@ -228,13 +235,14 @@ int zr_open(zr_fs_t* fs, const char* path)
         return fd;
     g.fds[fd].size = finfo.fsize;
     g.fds[fd].offset = finfo.offset + 16;
-    g.fds[fd].offset = __skip_name(fs, g.fds[fd].offset);
+    g.fds[fd].offset = __skip_name(g.fds[fd].offset);
     g.fds[fd].curr_pos = 0;
     return fd;    //skips system FDs
 }
 
-int zr_close(zr_fs_t* fs, int fd)
+int zr_close(int fd)
 {
+//    zr_fs_t* fs = g.volume[g.curr_volume].fs;
     if(g.fds[fd].offset == 0)
         return ZR_FILE_NOT_OPENED;
     g.fds[fd].curr_pos = 0;
@@ -242,9 +250,10 @@ int zr_close(zr_fs_t* fs, int fd)
     return ZR_OK;
 }
 
-int zr_read(zr_fs_t* fs, int fd, void* buf, zr_u32_t nbytes)
+int zr_read(int fd, void* buf, zr_u32_t nbytes)
 {
     int max_to_read;
+    zr_fs_t* fs = g.volume[g.curr_volume].fs;
     if(g.fds[fd].offset == 0)
         return ZR_FILE_NOT_OPENED;
 
@@ -259,12 +268,12 @@ int zr_read(zr_fs_t* fs, int fd, void* buf, zr_u32_t nbytes)
     return max_to_read;
 }
 
-zr_u32_t zr_tell(zr_fs_t* fs, int fd)
+zr_u32_t zr_tell(int fd)
 {
     return g.fds[fd].curr_pos;
 }
 
-int zr_lseek(zr_fs_t* fs, int fd, zr_u32_t offset)
+int zr_lseek(int fd, zr_u32_t offset, int seek_opt)
 {
     if(g.fds[fd].size >= offset)
         g.fds[fd].offset = g.fds[fd].size - 1;

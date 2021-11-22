@@ -27,10 +27,11 @@ int main(int argc, char* argv[])
     fs.start = 0;
     fs.read_f = read_func;
 
-    int ret = zr_init(&fs);
-//    printf("%d\n", ret);
-    if(ret != ZR_OK)
+    int ret = zr_mount(&fs);
+    printf("%d\n", ret);
+    if(ret < 0)
         exit(1);
+    zr_select_volume(0);
 
     while(1) {
         char buf[256];

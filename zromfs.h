@@ -7,8 +7,8 @@ extern "C" {
 #endif
 
 // configurations
-//#define ZR_ENDIAN_LITTLE  // x86, avr, arm
-#define ZR_ENDIAN_BIG       // 51 & stm8
+#define ZR_ENDIAN_LITTLE        // x86, avr, arm
+//#define ZR_ENDIAN_BIG         // 51, stm8
 #define ZR_MAX_VOLUMNS 2
 #define ZR_MAX_OPENED_FILES 2
 
@@ -26,7 +26,9 @@ typedef enum {
     ZR_NO_FILE = -5,
     ZR_NOT_A_DIR = -6,
     ZR_FILETYPE_NOT_SUPPORTED = -7,
-    ZR_FILE_NOT_OPENED = -8
+    ZR_FILE_NOT_OPENED = -8,
+    ZR_VOLUME_NOT_MOUNTED = -9,
+    ZR_VOLUME_NUM_EXCEED =-10
 } ZR_RESULT;
 
 enum {
@@ -59,8 +61,10 @@ typedef struct {
     zr_u32_t ftype;
 } zr_finfo_t;
 
-//int zr_init(zr_fs_t* fs);
-ZR_RESULT zr_mount(zr_fs_t* fs, int volume_id);
+// on successful, return mounted volume id; or return error code
+int zr_mount(zr_fs_t* fs);
+
+int zr_select_volume(int volume_id);
 ZR_RESULT zr_open(const char* path);
 ZR_RESULT zr_close(int fd);
 int zr_read(int fd, void* buff, zr_u32_t nbytes);

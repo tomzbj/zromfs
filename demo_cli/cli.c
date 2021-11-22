@@ -28,12 +28,12 @@ static void cmd_ls(char* const tokens[])
     if(strcasecmp(tokens[0], "ll") == 0)
         ll = 1;
 
-    if(zr_opendir(&fs, &dir, g.pwd) != ZR_OK)
+    if(zr_opendir(&dir, g.pwd) != ZR_OK)
         return;
     if(ll)
         printf("%-8s %-8s %-8s %-8s %-10s %-16s\n", "Offset", "Spec", "Next",
             "Size", "Type", "Filename");
-    while(zr_readdir(&fs, &dir, &finfo) == ZR_OK) {
+    while(zr_readdir(&dir, &finfo) == ZR_OK) {
         n++;
         tot_size += finfo.fsize;
         if(ll)
@@ -62,7 +62,7 @@ static void cmd_stat(char* const tokens[])
     strcat(path, "/");
     strcat(path, tokens[1]);
 
-    if(zr_stat(&fs, path, &finfo) != ZR_OK) {
+    if(zr_stat(path, &finfo) != ZR_OK) {
         printf("    File %s not found.\n\n", tokens[1]);
         return;
     }
@@ -94,12 +94,12 @@ static int __open_file(const char* fname, int* size)
     strcat(path, "/");
     strcat(path, fname);
 
-    if(zr_stat(&fs, path, &finfo) != ZR_OK) {
+    if(zr_stat(path, &finfo) != ZR_OK) {
         printf("    File %s not found.\n\n", fname);
         return -1;
     }
 
-    int fd = zr_open(&fs, path);
+    int fd = zr_open(path);
     if(fd < 0) {
         printf("    Failed to open file %s.\n\n", fname);
         return -1;
@@ -118,7 +118,7 @@ static void cmd_cat(char* const tokens[])
     while(size > 0) {
         int n = GEN_BUF_SIZE;
         memset(g.gen_buf, 0, GEN_BUF_SIZE);
-        n = zr_read(&fs, fd, g.gen_buf, n);
+        n = zr_read(fd, g.gen_buf, n);
         if(n <= 0)
             break;
         fwrite(g.gen_buf, n, 1, stdout);
@@ -126,7 +126,7 @@ static void cmd_cat(char* const tokens[])
         size -= n;
     }
     printf("\n\n");
-    zr_close(&fs, fd);
+    zr_close(fd);
 }
 
 static void cmd_hexview(char* const tokens[])
@@ -142,8 +142,8 @@ static void cmd_hexview(char* const tokens[])
     while(size > 0) {
         int n = 16;
         memset(g.gen_buf, 0, 16);
-        printf("%08lX ", zr_tell(&fs, fd));
-        n = zr_read(&fs, fd, g.gen_buf, n);
+        printf("%08lX ", zr_tell(fd));
+        n = zr_read(fd, g.gen_buf, n);
 //        printf("n=%d\n", n);
         if(n <= 0)
             break;
@@ -154,7 +154,7 @@ static void cmd_hexview(char* const tokens[])
         size -= n;
     }
     printf("\n\n");
-    zr_close(&fs, fd);
+    zr_close(fd);
 }
 
 static void cmd_crc32(char* const tokens[])
@@ -168,14 +168,14 @@ static void cmd_crc32(char* const tokens[])
     while(size > 0) {
         int n = GEN_BUF_SIZE;
         memset(g.gen_buf, 0, GEN_BUF_SIZE);
-        n = zr_read(&fs, fd, g.gen_buf, n);
+        n = zr_read(fd, g.gen_buf, n);
         if(n <= 0)
             break;
         crc = crc32(crc, g.gen_buf, n);
         size -= n;
     }
     printf("%08lX\n\n", ~crc);
-    zr_close(&fs, fd);
+    zr_close(fd);
 }
 
 static void cmd_export(char* const tokens[])
@@ -187,11 +187,12 @@ static void cmd_export(char* const tokens[])
 
     struct stat st;
     errno = 0;
-    int ret = stat(tokens[1], &st);
+//    int ret =
+    stat(tokens[1], &st);
 
-    if(errno != ENOENT) {  // file exists
+    if(errno != ENOENT) {    // file exists
         printf("File %s already exists.\n\n", tokens[1]);
-        zr_close(&fs, fd);
+        zr_close(fd);
         return;
     }
     FILE* fp = fopen(tokens[1], "wb");
@@ -199,7 +200,7 @@ static void cmd_export(char* const tokens[])
     while(size > 0) {
         int n = GEN_BUF_SIZE;
         memset(g.gen_buf, 0, GEN_BUF_SIZE);
-        n = zr_read(&fs, fd, g.gen_buf, n);
+        n = zr_read(fd, g.gen_buf, n);
         if(n <= 0)
             break;
         fwrite(g.gen_buf, n, 1, fp);
@@ -208,13 +209,13 @@ static void cmd_export(char* const tokens[])
     fclose(fp);
 
     printf("File %s exported.\n\n", tokens[1]);
-    zr_close(&fs, fd);
+    zr_close(fd);
 }
 
 static void cmd_cd(char* const tokens[])
 {
     zr_dir_t dir;
-    int ret = zr_opendir(&fs, &dir, tokens[1]);
+    int ret = zr_opendir(&dir, tokens[1]);
     if(ret == ZR_OK) {
         if(strcmp(tokens[1], "/") == 0)
             strcpy(g.pwd, "/");
@@ -246,7 +247,7 @@ const struct {
     const char* name;
     int n_args;
 } cmds[] = {
-    //
+//
     {cmd_ls, "ls", 1},    //
     {cmd_ls, "ll", 1},    //
     {cmd_pwd, "pwd", 1},    //
