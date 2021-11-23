@@ -212,14 +212,14 @@ int zr_readdir(zr_dir_t* dir, zr_finfo_t* finfo)
     return ZR_OK;
 }
 
-int __find_free_fd(void)
+static int __find_free_fd(void)
 {
     int i;
     for(i = 3; i < ZR_MAX_OPENED_FILES + 3; i++) {
         if(g.fds[i].offset == 0)
             return i;
     }
-    return -1;
+    return ZR_OPENED_FILE_EXCEED;
 }
 
 int zr_open(const char* path)

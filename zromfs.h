@@ -27,8 +27,9 @@ typedef enum {
     ZR_NOT_A_DIR = -6,
     ZR_FILETYPE_NOT_SUPPORTED = -7,
     ZR_FILE_NOT_OPENED = -8,
-    ZR_VOLUME_NOT_MOUNTED = -9,
-    ZR_VOLUME_NUM_EXCEED =-10
+    ZR_OPENED_FILE_EXCEED = -9,
+    ZR_VOLUME_NOT_MOUNTED = -10,
+    ZR_VOLUME_NUM_EXCEED = -11
 } ZR_RESULT;
 
 enum {
@@ -61,19 +62,16 @@ typedef struct {
     zr_u32_t ftype;
 } zr_finfo_t;
 
-// on successful, return mounted volume id; or return error code
-int zr_mount(zr_fs_t* fs);
-
-int zr_select_volume(int volume_id);
-ZR_RESULT zr_open(const char* path);
-ZR_RESULT zr_close(int fd);
-int zr_read(int fd, void* buff, zr_u32_t nbytes);
-ZR_RESULT zr_lseek(int fd, zr_u32_t offset, int seek_opt);
-zr_u32_t zr_tell(int fd);
-ZR_RESULT zr_stat(const char* path, zr_finfo_t* finfo);
-
-ZR_RESULT zr_opendir(zr_dir_t* dir, const char* path);
-ZR_RESULT zr_readdir(zr_dir_t* dir, zr_finfo_t* finfo);
+int zr_mount(zr_fs_t* fs);                                  // mount a volume
+ZR_RESULT zr_select_volume(int volume_id);                  // select current volume
+int zr_open(const char* path);                              // open a file
+ZR_RESULT zr_close(int fd);                                 // close a opened file
+int zr_read(int fd, void* buff, zr_u32_t nbytes);           // read data from a file
+ZR_RESULT zr_lseek(int fd, zr_u32_t offset, int seek_opt);  // move current read position to offset
+zr_u32_t zr_tell(int fd);                                   // return current read position of fd
+ZR_RESULT zr_stat(const char* path, zr_finfo_t* finfo);     // get file status
+ZR_RESULT zr_opendir(zr_dir_t* dir, const char* path);      // open a directory
+ZR_RESULT zr_readdir(zr_dir_t* dir, zr_finfo_t* finfo);     // read a directory item
 
 #ifdef __cplusplus
 }
